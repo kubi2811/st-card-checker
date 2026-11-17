@@ -70,6 +70,8 @@
         <label class="chk"><input type="checkbox" id="aoFonts" checked> Sửa font tiếng Việt, URL Markdown</label>
         <label class="chk"><input type="checkbox" id="aoData" checked> Đồng bộ <code>first_mes</code>/<code>alternate_greetings</code> → <code>data.*</code> (chỉ gửi bản gốc cho AI)</label>
         <label class="chk"><input type="checkbox" id="aoEllipsis"> Bỏ cắt chữ (ellipsis / line-clamp)</label>
+        <label class="chk"><input type="checkbox" id="aoCache" checked> Dùng lại các đoạn đã dịch ở lần chạy trước (bộ nhớ đệm trong thư mục <code>du-lieu/</code>)</label>
+        <div class="row"><span class="muted" id="cacheInfo"></span><button class="ghost sm" id="btnCacheClear" type="button">Xoá bộ nhớ đệm</button></div>
       </div>
       <div class="ai-nums">
         <label>RPM (lượt gọi/phút, 0 = không giới hạn) <input type="number" id="aoRpm" min="0" value="5"></label>
@@ -88,7 +90,7 @@
     </details>
     <div class="row">
       <button class="primary" id="aiStart" disabled>Bắt đầu sửa bằng AI</button>
-      <button class="ghost hidden" id="aiStop">Dừng</button>
+      <button class="ghost hidden" id="aiStop" title="Dừng gọi API, ghép phần đã dịch xong thành file">Dừng &amp; lưu phần đã dịch</button>
       <span id="aiMsg" class="muted"></span>
     </div>
     <div id="aiRun" class="hidden">
@@ -100,6 +102,7 @@
         <button class="ghost" id="aiUse">Dùng kết quả làm File DỊCH &amp; phân tích lại</button>
         <button class="ghost" id="aiGlossDl">Tải từ điển đã dùng</button>
       </div>
+      <div class="muted" id="aiSaved"></div>
       <div class="row"><label class="chk"><input type="checkbox" id="aiOnlyWarn" checked> Chỉ hiện cảnh báo/lỗi</label></div>
       <div class="ai-log mono" id="aiLog"></div>
     </div>

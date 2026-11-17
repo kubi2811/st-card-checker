@@ -314,7 +314,7 @@ setInterval(pollUpd, 60000);
   const LS = 'stcc.ai.v1';
   try { const o = JSON.parse(localStorage.getItem(LS) || '{}'); if (!o.v2) { delete o.aoConc; delete o.aoBatch; delete o.aoSegs; o.v2 = 1; localStorage.setItem(LS, JSON.stringify(o)); } } catch (_) { /* bỏ qua */ }
   const store = { get() { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (_) { return {}; } }, set(v) { try { localStorage.setItem(LS, JSON.stringify(v)); } catch (_) { /* bỏ qua */ } } };
-  const F = { aiUrl: 'v', aiKey: 'v', aoRebuild: 'c', aoTerms: 'c', aoFonts: 'c', aoData: 'c', aoEllipsis: 'c', aoRpm: 'v', aoLimit: 'v', aoConc: 'v', aoBatch: 'v', aoSegs: 'v', aoSegLen: 'v', aoPasses: 'v', aoTemp: 'v', aoMax: 'v', aoGloss: 'v' };
+  const F = { aiUrl: 'v', aiKey: 'v', aoRebuild: 'c', aoTerms: 'c', aoFonts: 'c', aoData: 'c', aoEllipsis: 'c', aoCache: 'c', aoRpm: 'v', aoLimit: 'v', aoConc: 'v', aoBatch: 'v', aoSegs: 'v', aoSegLen: 'v', aoPasses: 'v', aoTemp: 'v', aoMax: 'v', aoGloss: 'v' };
   const saved = store.get();
   for (const [id, t] of Object.entries(F)) {
     const el = $('#' + id);
@@ -370,7 +370,8 @@ setInterval(pollUpd, 60000);
     const n = (id, d) => (Number($('#' + id).value) || d);
     const body = {
       mode: mode(), raw: S.raw.text, trans: S.trans ? S.trans.text : null,
-      options: { includeTaggedEntries: $('#optTagged').checked, rebuild: $('#aoRebuild').checked, termPass: $('#aoTerms').checked, fonts: $('#aoFonts').checked, mdlink: $('#aoFonts').checked, dataSync: $('#aoData').checked, ellipsis: $('#aoEllipsis').checked, passes: n('aoPasses', 2), limitSegs: Number($('#aoLimit').value) || 0, glossaryOverride: $('#aoGloss').value },
+      names: { raw: S.raw.name, trans: S.trans ? S.trans.name : null },
+      options: { includeTaggedEntries: $('#optTagged').checked, rebuild: $('#aoRebuild').checked, termPass: $('#aoTerms').checked, fonts: $('#aoFonts').checked, mdlink: $('#aoFonts').checked, dataSync: $('#aoData').checked, ellipsis: $('#aoEllipsis').checked, useCache: $('#aoCache').checked, passes: n('aoPasses', 2), limitSegs: Number($('#aoLimit').value) || 0, glossaryOverride: $('#aoGloss').value },
       ai: { baseURL: $('#aiUrl').value.trim(), apiKey: $('#aiKey').value.trim(), model: $('#aiModel').value.trim(), rpm: $('#aoRpm').value === '' ? 5 : Number($('#aoRpm').value), concurrency: n('aoConc', 3), batchChars: n('aoBatch', 12000), batchSegs: n('aoSegs', 200), segLen: n('aoSegLen', 900), temperature: $('#aoTemp').value === '' ? null : Number($('#aoTemp').value), maxTokens: Number($('#aoMax').value) || 0 },
     };
     try {
@@ -381,11 +382,22 @@ setInterval(pollUpd, 60000);
       J.mode = body.mode; J.outBase = (body.mode === 'fix' && S.trans ? S.trans.name : S.raw.name);
       try { localStorage.setItem('stcc.ai.job', JSON.stringify({ id: j.id, mode: J.mode, outBase: J.outBase })); } catch (_) { /* bỏ qua */ }
       $('#aiLog').innerHTML = ''; $('#aiRes').classList.add('hidden'); $('#aiRun').classList.remove('hidden');
-      $('#aiStop').classList.remove('hidden'); refresh();
+      $('#aiStop').classList.remove('hidden'); $('#aiStop').disabled = false; $('#aiSaved').textContent = ''; refresh();
       poll();
     } catch (e) { $('#aiMsg').textContent = 'Lỗi: ' + e.message; }
   };
-  $('#aiStop').onclick = () => J.id && fetch(`/api/ai/job/${J.id}/cancel`, { method: 'POST' });
+  $('#aiStop').onclick = () => { if (!J.id) return; $('#aiStop').disabled = true; fetch(`/api/ai/job/${J.id}/cancel`, { method: 'POST' }); };
+  async function loadCacheInfo() {
+    try {
+      const c = await (await fetch('/api/ai/cache')).json();
+      $('#cacheInfo').textContent = `Bộ nhớ đệm: ${c.entries.toLocaleString()} mục (${(c.bytes / 1024 / 1024).toFixed(1)} MB). File kết quả tự lưu ở ${c.outDir}`;
+    } catch (_) { /* bỏ qua */ }
+  }
+  $('#btnCacheClear').onclick = async () => {
+    if (!confirm('Xoá toàn bộ bản dịch đã lưu? Lần chạy sau sẽ phải gọi AI dịch lại từ đầu.')) return;
+    await fetch('/api/ai/cache', { method: 'POST' }); loadCacheInfo();
+  };
+  loadCacheInfo();
   $('#aiOnlyWarn').onchange = () => $('#aiLog').classList.toggle('onlywarn', $('#aiOnlyWarn').checked);
   $('#aiLog').classList.toggle('onlywarn', $('#aiOnlyWarn').checked);
 
@@ -410,14 +422,16 @@ setInterval(pollUpd, 60000);
     const chip = (t) => `<span>${t}</span>`;
     $('#aiStats').innerHTML = [
       chip(`Lượt gọi API: ${s.calls}` + (s.calls ? ` · TB ${(s.callMs / 1000 / s.calls).toFixed(1)}s/lượt` : '')), chip(`Token: ${s.promptTokens.toLocaleString()} vào / ${s.completionTokens.toLocaleString()} ra`),
-      chip(`Đoạn: ${s.segsOk}/${s.segs} ổn · ${s.segsFail} giữ nguyên · ${s.segsReverted} hoàn tác`), chip(`Trường dựng lại từ RAW: ${s.rebuilt}`),
+      chip(`Đoạn: ${s.segsOk}/${s.segs} ổn${s.segsCached ? ` (${s.segsCached} từ bộ nhớ đệm)` : ''} · ${s.segsFail} giữ nguyên · ${s.segsReverted} hoàn tác`), chip(`Trường dựng lại từ RAW: ${s.rebuilt}`),
       s.errors ? `<span class="pill error">${s.errors} lỗi API</span>` : '',
       st.before ? chip(`Trước: <b>${st.before.error}</b> lỗi · ${st.before.warn} cảnh báo`) : '',
       st.after ? `<span class="pill ${st.after.error ? 'warn' : 'ok'}">Sau: ${st.after.error} lỗi · ${st.after.warn} cảnh báo</span>` : '',
     ].join('');
     if (st.state === 'running') { J.timer = setTimeout(poll, 1000); return; }
     J.running = false; $('#aiStop').classList.add('hidden'); refresh();
-    $('#aiPhase').textContent = { done: 'Hoàn tất ✓', cancelled: 'Đã dừng', error: 'Lỗi — xem nhật ký' }[st.state] || st.state;
+    $('#aiPhase').textContent = { done: 'Hoàn tất ✓', cancelled: st.hasResult ? 'Đã dừng — đã ghép phần đã dịch' : 'Đã dừng', error: 'Lỗi — xem nhật ký' }[st.state] || st.state;
+    $('#aiSaved').textContent = st.savedFile ? 'Đã tự lưu vào: ' + st.savedFile : '';
+    loadCacheInfo();
     if (st.hasResult) $('#aiRes').classList.remove('hidden');
   }
 

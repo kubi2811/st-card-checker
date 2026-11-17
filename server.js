@@ -8,6 +8,7 @@ const { applyFixes, detectIndent } = require('./lib/fixer');
 const updater = require('./lib/updater');
 const aiClient = require('./lib/ai/client');
 const aiPipeline = require('./lib/ai/pipeline');
+const aiCache = require('./lib/ai/cache');
 const config = require('./config.json');
 const pkg = require('./package.json');
 
@@ -75,8 +76,12 @@ const server = http.createServer(async (req, res) => {
       parseCard(body.raw, 'File RAW');
       if (mode === 'fix') parseCard(body.trans, 'File DỊCH');
       if (!body.ai || !body.ai.baseURL || !body.ai.model) return send(res, 400, { error: 'Thiếu URL API hoặc model' });
-      const job = aiPipeline.start({ rawText: body.raw, transText: body.trans, mode, options: body.options || {}, ai: body.ai });
+      const job = aiPipeline.start({ rawText: body.raw, transText: body.trans, mode, options: body.options || {}, ai: body.ai, names: body.names || {} });
       return send(res, 200, { id: job.id });
+    }
+    if (url.pathname === '/api/ai/cache') {
+      if (req.method === 'POST') aiCache.clear();
+      return send(res, 200, { entries: aiCache.size(), bytes: aiCache.fileBytes(), dir: aiCache.DIR, outDir: aiCache.OUT_DIR });
     }
     if (req.method === 'GET' && url.pathname === '/api/ai/jobs') {
       return send(res, 200, [...aiPipeline.jobs.values()].map((j) => { const st = aiPipeline.status(j, Math.max(0, j.log.length - 8)); return { ...st, log: st.log.map((l) => l.msg) }; }));

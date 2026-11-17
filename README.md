@@ -21,6 +21,8 @@ Mẹo khi dùng provider miễn phí/giới hạn:
 - Gặp 429/5xx/mất mạng, tool **tự gọi lại liên tục**. Hết quota thì nhật ký báo đỏ: đổi tài khoản/key bên provider là tool tự chạy tiếp.
 - Sai key (401/403) hoặc sai model/URL (404): tool dừng ngay và báo lý do.
 - Lỡ tải lại trang hoặc đóng tab: mở lại `http://localhost:4848` là thấy tiếp tiến độ (miễn là chưa tắt cửa sổ đen).
+- **Dừng giữa chừng không mất công:** bấm **Dừng & lưu phần đã dịch**, tool ghép các đoạn đã dịch xong thành file (phần chưa làm giữ nguyên bản cũ). Mỗi đoạn dịch xong còn được lưu vào **bộ nhớ đệm** `du-lieu/bo-nho-dem.jsonl`, nên chạy lại cùng thẻ (kể cả sau khi tắt máy, cập nhật tool hay đổi tài khoản) thì các đoạn đã dịch được dùng lại ngay, chỉ gọi AI cho phần còn thiếu.
+- Mọi file kết quả đều được **tự lưu** vào `du-lieu/ket-qua/` (bản dừng giữa chừng có đuôi `.dang-do`). Muốn AI dịch lại từ đầu thì bấm **Xoá bộ nhớ đệm** trong Tuỳ chọn nâng cao.
 - **Chạy thử N đoạn** (trong Tuỳ chọn nâng cao) để thử model/cấu hình trên một mẫu nhỏ trước khi chạy cả thẻ.
 
 URL, key và các tuỳ chọn được lưu trong trình duyệt của máy đang dùng. Key chỉ được gửi tới máy chủ cục bộ của tool và tới đúng provider đã nhập.

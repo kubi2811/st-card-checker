@@ -6,3 +6,4 @@ config.local.json
 samples/
 .DS_Store
 public/_test/
+du-lieu/
