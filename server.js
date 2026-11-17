@@ -78,14 +78,19 @@ const server = http.createServer(async (req, res) => {
       const job = aiPipeline.start({ rawText: body.raw, transText: body.trans, mode, options: body.options || {}, ai: body.ai });
       return send(res, 200, { id: job.id });
     }
+    if (req.method === 'GET' && url.pathname === '/api/ai/jobs') {
+      return send(res, 200, [...aiPipeline.jobs.values()].map((j) => { const st = aiPipeline.status(j, Math.max(0, j.log.length - 8)); return { ...st, log: st.log.map((l) => l.msg) }; }));
+    }
     let m;
     if ((m = url.pathname.match(/^\/api\/ai\/job\/(\w+)(\/cancel|\/result)?$/))) {
       const job = aiPipeline.jobs.get(m[1]);
       if (!job) return send(res, 404, { error: 'Không tìm thấy phiên chạy (máy chủ đã khởi động lại?)' });
       if (m[2] === '/cancel' && req.method === 'POST') { job.cancel(); return send(res, 200, { ok: true }); }
       if (m[2] === '/result') {
+        if (url.searchParams.get('samples')) return send(res, 200, { samples: job.samples || [] });
         if (!job.result) return send(res, 404, { error: 'Chưa có kết quả' });
         if (url.searchParams.get('glossary')) return send(res, 200, { glossary: job.glossary || [] });
+        if (url.searchParams.get('samples')) return send(res, 200, { samples: job.samples || [] });
         return send(res, 200, job.result, 'application/json; charset=utf-8');
       }
       return send(res, 200, aiPipeline.status(job, Number(url.searchParams.get('since')) || 0));

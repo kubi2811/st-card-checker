@@ -72,11 +72,13 @@
         <label class="chk"><input type="checkbox" id="aoEllipsis"> Bỏ cắt chữ (ellipsis / line-clamp)</label>
       </div>
       <div class="ai-nums">
-        <label>Luồng song song <input type="number" id="aoConc" min="1" max="64" value="8"></label>
-        <label>Ký tự mỗi lượt gọi <input type="number" id="aoBatch" min="500" step="500" value="6000"></label>
-        <label>Đoạn mỗi lượt <input type="number" id="aoSegs" min="1" value="60"></label>
+        <label>RPM (lượt gọi/phút, 0 = không giới hạn) <input type="number" id="aoRpm" min="0" value="5"></label>
+        <label>Luồng song song <input type="number" id="aoConc" min="1" max="64" value="3"></label>
+        <label>Ký tự mỗi lượt gọi <input type="number" id="aoBatch" min="500" step="500" value="12000"></label>
+        <label>Đoạn mỗi lượt <input type="number" id="aoSegs" min="1" value="200"></label>
         <label>Cắt dòng dài ở <input type="number" id="aoSegLen" min="200" step="100" value="900"></label>
         <label>Số vòng <input type="number" id="aoPasses" min="1" max="5" value="2"></label>
+        <label>Chạy thử N đoạn (0 = tất cả) <input type="number" id="aoLimit" min="0" value="0"></label>
         <label>Temperature <input type="number" id="aoTemp" min="0" max="2" step="0.1" value="0.2"></label>
         <label>max_tokens <input type="number" id="aoMax" min="0" placeholder="mặc định"></label>
       </div>
