@@ -22,6 +22,11 @@ Mẹo khi dùng provider miễn phí/giới hạn:
 - Sai key (401/403) hoặc sai model/URL (404): tool dừng ngay và báo lý do.
 - Lỡ tải lại trang hoặc đóng tab: mở lại `http://localhost:4848` là thấy tiếp tiến độ (miễn là chưa tắt cửa sổ đen).
 - **Dừng giữa chừng không mất công:** bấm **Dừng & lưu phần đã dịch**, tool ghép các đoạn đã dịch xong thành file (phần chưa làm giữ nguyên bản cũ). Mỗi đoạn dịch xong còn được lưu vào **bộ nhớ đệm** `du-lieu/bo-nho-dem.jsonl`, nên chạy lại cùng thẻ (kể cả sau khi tắt máy, cập nhật tool hay đổi tài khoản) thì các đoạn đã dịch được dùng lại ngay, chỉ gọi AI cho phần còn thiếu.
+- **Lỗi cú pháp do AI gây ra được tự vá:** khóa object nhiều chữ chưa đặt trong nháy (`Lựa chọn: [` → `'Lựa chọn': [`), mất dấu phẩy cuối dòng… Chỉ khi vá không được mới hoàn tác dòng đó, và lần chạy sau AI được nhắc lại đúng lỗi cũ.
+- **Tên thuộc tính thống nhất với code:** tool học từ code đã dịch (`L.抉择` ↔ `L['Lựa chọn']`) để dữ liệu dịch mới dùng đúng tên mà code đang đọc.
+- **Prompt bổ sung / jailbreak kiểu SillyTavern** (Tuỳ chọn → *Prompt bổ sung*): thêm prompt với vai Hệ thống / Người dùng / Trợ lý AI, đặt ở Đầu hoặc Cuối (Trợ lý AI ở cuối = prefill), hoặc **nhập thẳng file preset `.json` của ST**. Cần cho các trạm như sukaka/golden.
+- **Streaming** bật sẵn (có công tắc trong Tuỳ chọn nâng cao) — trạm không stream sẽ bị cắt phản hồi dài.
+- Gặp lỗi: bấm **Tải báo cáo lỗi** (gồm log + cài đặt, KHÔNG có API key) rồi gửi cho người làm tool.
 - Mọi file kết quả đều được **tự lưu** vào `du-lieu/ket-qua/` (bản dừng giữa chừng có đuôi `.dang-do`). Muốn AI dịch lại từ đầu thì bấm **Xoá bộ nhớ đệm** trong Tuỳ chọn nâng cao.
 - **Chạy thử N đoạn** (trong Tuỳ chọn nâng cao) để thử model/cấu hình trên một mẫu nhỏ trước khi chạy cả thẻ.
 

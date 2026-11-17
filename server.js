@@ -93,6 +93,12 @@ const server = http.createServer(async (req, res) => {
       if (m[2] === '/cancel' && req.method === 'POST') { job.cancel(); return send(res, 200, { ok: true }); }
       if (m[2] === '/result') {
         if (url.searchParams.get('samples')) return send(res, 200, { samples: job.samples || [] });
+        if (url.searchParams.get('report')) {
+          // báo cáo lỗi: log đầy đủ + cài đặt, KHÔNG kèm API key / nội dung prompt bổ sung
+          const st = aiPipeline.status(job, 0);
+          const { apiKey, extraPrompts, ...ai } = job.input.ai || {};
+          return send(res, 200, { tool: { version: pkg.version, commit: publicState().current }, names: job.input.names, mode: job.input.mode, options: job.input.options, ai: { ...ai, extraPrompts: (extraPrompts || []).map((p) => ({ role: p.role, pos: p.pos, chars: (p.content || '').length })) }, state: st.state, phase: st.phase, before: st.before, after: st.after, stats: st.stats, elapsed: st.elapsed, log: st.log });
+        }
         if (!job.result) return send(res, 404, { error: 'Chưa có kết quả' });
         if (url.searchParams.get('glossary')) return send(res, 200, { glossary: job.glossary || [] });
         if (url.searchParams.get('samples')) return send(res, 200, { samples: job.samples || [] });

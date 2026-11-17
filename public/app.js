@@ -314,7 +314,7 @@ setInterval(pollUpd, 60000);
   const LS = 'stcc.ai.v1';
   try { const o = JSON.parse(localStorage.getItem(LS) || '{}'); if (!o.v2) { delete o.aoConc; delete o.aoBatch; delete o.aoSegs; o.v2 = 1; localStorage.setItem(LS, JSON.stringify(o)); } } catch (_) { /* bỏ qua */ }
   const store = { get() { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (_) { return {}; } }, set(v) { try { localStorage.setItem(LS, JSON.stringify(v)); } catch (_) { /* bỏ qua */ } } };
-  const F = { aiUrl: 'v', aiKey: 'v', aoRebuild: 'c', aoTerms: 'c', aoFonts: 'c', aoData: 'c', aoEllipsis: 'c', aoCache: 'c', aoRpm: 'v', aoLimit: 'v', aoConc: 'v', aoBatch: 'v', aoSegs: 'v', aoSegLen: 'v', aoPasses: 'v', aoTemp: 'v', aoMax: 'v', aoGloss: 'v' };
+  const F = { aiUrl: 'v', aiKey: 'v', aoRebuild: 'c', aoTerms: 'c', aoFonts: 'c', aoData: 'c', aoEllipsis: 'c', aoCache: 'c', aoRpm: 'v', aoLimit: 'v', aoConc: 'v', aoBatch: 'v', aoSegs: 'v', aoSegLen: 'v', aoPasses: 'v', aoTemp: 'v', aoMax: 'v', aoGloss: 'v', aoStream: 'c' };
   const saved = store.get();
   for (const [id, t] of Object.entries(F)) {
     const el = $('#' + id);
@@ -364,6 +364,70 @@ setInterval(pollUpd, 60000);
     b.disabled = false; refresh();
   };
 
+  // ---- Prompt bổ sung / jailbreak (kiểu SillyTavern) ----
+  const PP = { list: Array.isArray(saved.prompts) ? saved.prompts : [] };
+  const ROLES = [['system', 'Hệ thống'], ['user', 'Người dùng'], ['assistant', 'Trợ lý AI']];
+  const savePP = () => { const v = store.get(); v.prompts = PP.list; store.set(v); $('#ppCount').textContent = PP.list.length ? `(${PP.list.filter((p) => p.on).length}/${PP.list.length} đang bật)` : ''; };
+  function renderPP() {
+    $('#ppList').innerHTML = PP.list.map((p, i) => `
+      <div class="pp" data-i="${i}">
+        <div class="pp-head">
+          <label class="chk"><input type="checkbox" data-k="on" ${p.on ? 'checked' : ''}></label>
+          <input data-k="name" value="${esc(p.name || '')}" placeholder="Tên prompt">
+          <select data-k="role">${ROLES.map(([v, t]) => `<option value="${v}" ${p.role === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+          <select data-k="pos"><option value="start" ${p.pos !== 'end' ? 'selected' : ''}>Đầu</option><option value="end" ${p.pos === 'end' ? 'selected' : ''}>Cuối</option></select>
+          <button class="ghost sm" data-act="up" type="button" title="Lên">↑</button>
+          <button class="ghost sm" data-act="down" type="button" title="Xuống">↓</button>
+          <button class="ghost sm" data-act="del" type="button" title="Xoá">✕</button>
+        </div>
+        <textarea data-k="content" rows="4" spellcheck="false" placeholder="Nội dung prompt…">${esc(p.content || '')}</textarea>
+      </div>`).join('');
+    savePP();
+  }
+  const onPP = (e) => {
+    const row = e.target.closest('.pp'); const k = e.target.dataset.k; if (!row || !k) return;
+    const p = PP.list[+row.dataset.i]; p[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; savePP();
+  };
+  $('#ppList').addEventListener('input', onPP);
+  $('#ppList').addEventListener('change', onPP);
+  $('#ppList').addEventListener('click', (e) => {
+    const a = e.target.dataset.act; if (!a) return;
+    const i = +e.target.closest('.pp').dataset.i;
+    if (a === 'del' && !confirm('Xoá prompt này?')) return;
+    if (a === 'del') PP.list.splice(i, 1);
+    if (a === 'up' && i > 0) PP.list.splice(i - 1, 0, PP.list.splice(i, 1)[0]);
+    if (a === 'down' && i < PP.list.length - 1) PP.list.splice(i + 1, 0, PP.list.splice(i, 1)[0]);
+    renderPP();
+  });
+  $('#ppAdd').onclick = () => { PP.list.push({ on: true, name: '', role: 'system', pos: 'start', content: '' }); renderPP(); };
+  $('#ppImport').onclick = () => $('#ppFile').click();
+  $('#ppFile').onchange = async () => {
+    const f = $('#ppFile').files[0]; $('#ppFile').value = ''; if (!f) return;
+    try {
+      const j = JSON.parse(await f.text());
+      let add = [];
+      if (Array.isArray(j) && j.every((x) => x && 'content' in x)) add = j.map((x) => ({ on: x.on !== false, name: x.name || '', role: x.role || 'system', pos: x.pos === 'end' ? 'end' : 'start', content: x.content || '' }));
+      else if (Array.isArray(j.prompts)) {
+        // preset SillyTavern: theo prompt_order; prompt nằm sau “chatHistory” → Cuối
+        const byId = new Map(j.prompts.map((p) => [p.identifier, p]));
+        const ord = (Array.isArray(j.prompt_order) && (j.prompt_order.find((o) => o.character_id === 100001) || j.prompt_order[j.prompt_order.length - 1])) || null;
+        const seq = ord ? ord.order.map((o) => ({ p: byId.get(o.identifier), on: o.enabled !== false })) : j.prompts.map((p) => ({ p, on: p.enabled !== false }));
+        let pos = 'start';
+        for (const { p, on } of seq) {
+          if (!p) continue;
+          if (p.identifier === 'chatHistory') { pos = 'end'; continue; }
+          if (p.marker || !String(p.content || '').trim()) continue;
+          add.push({ on, name: p.name || p.identifier || '', role: ['system', 'user', 'assistant'].includes(p.role) ? p.role : 'system', pos: p.injection_position === 1 ? 'end' : pos, content: p.content });
+        }
+      } else throw new Error('không nhận ra định dạng');
+      if (!add.length) throw new Error('không có prompt nào có nội dung');
+      PP.list.push(...add); renderPP(); $('#ppBox').open = true;
+      alert(`Đã nhập ${add.length} prompt (${add.filter((x) => x.on).length} đang bật). Kiểm tra lại & tắt bớt những prompt không cần (ví dụ prompt nhập vai).`);
+    } catch (e) { alert('Không đọc được preset: ' + e.message); }
+  };
+  $('#ppExport').onclick = () => download('prompt-bo-sung.json', JSON.stringify(PP.list, null, 2));
+  renderPP();
+
   const J = { id: null, since: 0, running: false, timer: null };
   $('#aiStart').onclick = async () => {
     save();
@@ -372,7 +436,7 @@ setInterval(pollUpd, 60000);
       mode: mode(), raw: S.raw.text, trans: S.trans ? S.trans.text : null,
       names: { raw: S.raw.name, trans: S.trans ? S.trans.name : null },
       options: { includeTaggedEntries: $('#optTagged').checked, rebuild: $('#aoRebuild').checked, termPass: $('#aoTerms').checked, fonts: $('#aoFonts').checked, mdlink: $('#aoFonts').checked, dataSync: $('#aoData').checked, ellipsis: $('#aoEllipsis').checked, useCache: $('#aoCache').checked, passes: n('aoPasses', 2), limitSegs: Number($('#aoLimit').value) || 0, glossaryOverride: $('#aoGloss').value },
-      ai: { baseURL: $('#aiUrl').value.trim(), apiKey: $('#aiKey').value.trim(), model: $('#aiModel').value.trim(), rpm: $('#aoRpm').value === '' ? 5 : Number($('#aoRpm').value), concurrency: n('aoConc', 3), batchChars: n('aoBatch', 12000), batchSegs: n('aoSegs', 200), segLen: n('aoSegLen', 900), temperature: $('#aoTemp').value === '' ? null : Number($('#aoTemp').value), maxTokens: Number($('#aoMax').value) || 0 },
+      ai: { baseURL: $('#aiUrl').value.trim(), apiKey: $('#aiKey').value.trim(), model: $('#aiModel').value.trim(), rpm: $('#aoRpm').value === '' ? 5 : Number($('#aoRpm').value), concurrency: n('aoConc', 3), batchChars: n('aoBatch', 12000), batchSegs: n('aoSegs', 200), segLen: n('aoSegLen', 900), temperature: $('#aoTemp').value === '' ? null : Number($('#aoTemp').value), maxTokens: Number($('#aoMax').value) || 0, stream: $('#aoStream').checked, extraPrompts: PP.list.filter((p) => p.on && p.content.trim()).map((p) => ({ role: p.role, pos: p.pos, content: p.content })) },
     };
     try {
       const r = await fetch('/api/ai/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -456,6 +520,13 @@ setInterval(pollUpd, 60000);
   $('#aiGlossDl').onclick = async () => {
     const r = await fetch(`/api/ai/job/${J.id}/result?glossary=1`); const j = await r.json();
     download('tu-dien.txt', (j.glossary || []).map(([a, b]) => `${a} = ${b}`).join('\n'), 'text/plain');
+  };
+  $('#aiReport').onclick = async () => {
+    try {
+      const r = await fetch(`/api/ai/job/${J.id}/result?report=1`); const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      download('bao-cao-loi-' + (J.outBase || 'the').replace(/\.json$/i, '') + '.json', JSON.stringify(j, null, 2));
+    } catch (e) { alert('Không tải được báo cáo: ' + e.message); }
   };
   // Tiếp tục theo dõi job đang chạy sau khi tải lại trang
   (async () => {

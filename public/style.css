@@ -149,3 +149,11 @@ textarea#reportText { width: 100%; min-height: 420px; margin-top: 12px; font-fam
 .ai-log .warn { color: var(--warn); } .ai-log .error { color: var(--err); } .ai-log .ok { color: var(--ok); font-weight: 600; }
 @media (max-width: 860px) { .ai-grid { grid-template-columns: 1fr; } }
 .ai-log.onlywarn div.info { display: none; }
+
+/* Prompt bổ sung kiểu SillyTavern */
+.ai-prompts p { margin: 8px 0; font-size: 13px; }
+.ai-nums label.chk { display: flex; grid-column: 1 / -1; }
+.pp { border: 1px solid var(--line, #3334); border-radius: 8px; padding: 8px; margin-bottom: 8px; display: grid; gap: 6px; }
+.pp-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pp-head input[data-k=name] { flex: 1 1 160px; min-width: 0; }
+.pp textarea { width: 100%; font-family: var(--mono); font-size: 12.5px; resize: vertical; }
