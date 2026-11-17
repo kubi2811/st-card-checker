@@ -291,6 +291,7 @@ function showUpd(s) {
 async function pollUpd() { try { showUpd(await (await fetch('/api/update/status')).json()); } catch (_) {} }
 $('#btnCheckUpd').onclick = async () => { $('#updText').textContent = 'Đang kiểm tra…'; showUpd(await (await fetch('/api/update/check', { method: 'POST' })).json()); };
 $('#btnApplyUpd').onclick = async () => {
+  if (window.aiJobRunning && window.aiJobRunning() && !confirm('AI đang chạy — cập nhật sẽ khởi động lại tool và MẤT tiến độ hiện tại. Vẫn cập nhật?')) return;
   if (!confirm('Tải bản mới từ GitHub và khởi động lại công cụ? (Kết quả phân tích hiện tại sẽ mất, file của bạn không bị ảnh hưởng.)')) return;
   $('#updText').textContent = 'Đang tải bản mới…';
   const pid = (await (await fetch('/api/version')).json()).pid;
@@ -320,10 +321,11 @@ setInterval(pollUpd, 60000);
     if (saved[id] !== undefined) { if (t === 'c') el.checked = saved[id]; else el.value = saved[id]; }
     el.addEventListener('change', save);
   }
-  if (saved.models) fillModels(saved.models, saved.model);
+  if (saved.models) fillModels(saved.models, saved.model); else if (saved.model) $('#aiModel').value = saved.model;
   if (saved.mode) { const r = document.querySelector(`input[name=aiMode][value=${saved.mode}]`); if (r) r.checked = true; }
   document.querySelectorAll('input[name=aiMode]').forEach((r) => r.addEventListener('change', () => { save(); refresh(); }));
   $('#aiModel').addEventListener('change', () => { save(); refresh(); });
+  $('#aiModel').addEventListener('input', refresh);
   function save() {
     const v = { ...store.get() };
     for (const [id, t] of Object.entries(F)) v[id] = t === 'c' ? $('#' + id).checked : $('#' + id).value;
@@ -343,10 +345,9 @@ setInterval(pollUpd, 60000);
   $('#aiEye').onclick = () => { const k = $('#aiKey'); k.type = k.type === 'password' ? 'text' : 'password'; };
 
   function fillModels(list, sel) {
-    const s = $('#aiModel');
-    s.innerHTML = list.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
-    const pick = sel && list.includes(sel) ? sel : (list.find((m) => /flash/i.test(m)) || list[0] || '');
-    s.value = pick;
+    $('#aiModelList').innerHTML = list.map((m) => `<option value="${esc(m)}">`).join('');
+    const pick = sel && list.includes(sel) ? sel : (sel || list.find((m) => /flash/i.test(m)) || list[0] || '');
+    $('#aiModel').value = pick;
   }
   $('#aiLoad').onclick = async () => {
     const b = $('#aiLoad'); b.disabled = true; $('#aiMsg').textContent = 'Đang tải danh sách model…';
@@ -370,13 +371,15 @@ setInterval(pollUpd, 60000);
     const body = {
       mode: mode(), raw: S.raw.text, trans: S.trans ? S.trans.text : null,
       options: { includeTaggedEntries: $('#optTagged').checked, rebuild: $('#aoRebuild').checked, termPass: $('#aoTerms').checked, fonts: $('#aoFonts').checked, mdlink: $('#aoFonts').checked, dataSync: $('#aoData').checked, ellipsis: $('#aoEllipsis').checked, passes: n('aoPasses', 2), limitSegs: Number($('#aoLimit').value) || 0, glossaryOverride: $('#aoGloss').value },
-      ai: { baseURL: $('#aiUrl').value.trim(), apiKey: $('#aiKey').value.trim(), model: $('#aiModel').value, rpm: $('#aoRpm').value === '' ? 5 : Number($('#aoRpm').value), concurrency: n('aoConc', 3), batchChars: n('aoBatch', 12000), batchSegs: n('aoSegs', 200), segLen: n('aoSegLen', 900), temperature: $('#aoTemp').value === '' ? null : Number($('#aoTemp').value), maxTokens: Number($('#aoMax').value) || 0 },
+      ai: { baseURL: $('#aiUrl').value.trim(), apiKey: $('#aiKey').value.trim(), model: $('#aiModel').value.trim(), rpm: $('#aoRpm').value === '' ? 5 : Number($('#aoRpm').value), concurrency: n('aoConc', 3), batchChars: n('aoBatch', 12000), batchSegs: n('aoSegs', 200), segLen: n('aoSegLen', 900), temperature: $('#aoTemp').value === '' ? null : Number($('#aoTemp').value), maxTokens: Number($('#aoMax').value) || 0 },
     };
     try {
       const r = await fetch('/api/ai/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
       Object.assign(J, { id: j.id, since: 0, running: true });
+      J.mode = body.mode; J.outBase = (body.mode === 'fix' && S.trans ? S.trans.name : S.raw.name);
+      try { localStorage.setItem('stcc.ai.job', JSON.stringify({ id: j.id, mode: J.mode, outBase: J.outBase })); } catch (_) { /* bỏ qua */ }
       $('#aiLog').innerHTML = ''; $('#aiRes').classList.add('hidden'); $('#aiRun').classList.remove('hidden');
       $('#aiStop').classList.remove('hidden'); refresh();
       poll();
@@ -419,8 +422,8 @@ setInterval(pollUpd, 60000);
   }
 
   const outName = () => {
-    const b = (S.trans && mode() === 'fix' ? S.trans.name : S.raw.name).replace(/\.json$/i, '');
-    return b + (mode() === 'fix' ? '.ai-fixed.json' : '.ai-vi.json');
+    const b = (J.outBase || (S.trans ? S.trans.name : S.raw ? S.raw.name : 'the')).replace(/\.json$/i, '');
+    return b + ((J.mode || mode()) === 'fix' ? '.ai-fixed.json' : '.ai-vi.json');
   };
   const getResult = async () => { const r = await fetch(`/api/ai/job/${J.id}/result`); if (!r.ok) throw new Error((await r.json()).error); return r.text(); };
   const download = (name, text, type = 'application/json') => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
@@ -429,6 +432,7 @@ setInterval(pollUpd, 60000);
     try {
       const text = await getResult();
       S.trans = { name: outName(), text, obj: JSON.parse(text) };
+      if (!S.raw) throw new Error('Hãy chọn lại File RAW để phân tích.');
       refreshDrops();
       document.querySelector('input[name=aiMode][value=fix]').checked = true; save(); refresh();
       await analyze();
@@ -439,5 +443,17 @@ setInterval(pollUpd, 60000);
     const r = await fetch(`/api/ai/job/${J.id}/result?glossary=1`); const j = await r.json();
     download('tu-dien.txt', (j.glossary || []).map(([a, b]) => `${a} = ${b}`).join('\n'), 'text/plain');
   };
+  // Tiếp tục theo dõi job đang chạy sau khi tải lại trang
+  (async () => {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem('stcc.ai.job') || 'null'); } catch (_) { return; }
+    if (!saved) return;
+    const r = await fetch(`/api/ai/job/${saved.id}`).catch(() => null);
+    if (!r || !r.ok) return;
+    Object.assign(J, { id: saved.id, since: 0, running: true, mode: saved.mode, outBase: saved.outBase });
+    $('#aiRun').classList.remove('hidden'); $('#aiStop').classList.remove('hidden');
+    poll();
+  })();
+  window.aiJobRunning = () => !!J.running;
   refresh();
 })();

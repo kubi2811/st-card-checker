@@ -16,6 +16,13 @@ Cách tool làm để đỡ tốn token và không làm hỏng code:
 5. Kiểm tra từng dòng AI trả về: nếu thêm/bớt dấu nháy, ngoặc, `;`, `=` hoặc vẫn còn Hán tự thì gửi lại 1 lần, vẫn sai thì giữ nguyên dòng cũ. Sau khi ghép, tool chạy `node --check`; dòng nào gây lỗi cú pháp mới thì hoàn tác dòng đó.
 6. Sửa font tiếng Việt, URL Markdown, đồng bộ `data.*`, rồi phân tích lại để so số lỗi trước/sau. Mặc định chạy 2 vòng.
 
+Mẹo khi dùng provider miễn phí/giới hạn:
+- Mặc định gộp ~12.000 ký tự mỗi lượt gọi, 3 luồng, **RPM 5**. Provider giới hạn tốc độ (429 “rate limit”) thì giảm RPM/luồng. Provider mạnh thì tăng lên.
+- Gặp 429/5xx/mất mạng, tool **tự gọi lại liên tục**. Hết quota thì nhật ký báo đỏ: đổi tài khoản/key bên provider là tool tự chạy tiếp.
+- Sai key (401/403) hoặc sai model/URL (404): tool dừng ngay và báo lý do.
+- Lỡ tải lại trang hoặc đóng tab: mở lại `http://localhost:4848` là thấy tiếp tiến độ (miễn là chưa tắt cửa sổ đen).
+- **Chạy thử N đoạn** (trong Tuỳ chọn nâng cao) để thử model/cấu hình trên một mẫu nhỏ trước khi chạy cả thẻ.
+
 URL, key và các tuỳ chọn được lưu trong trình duyệt của máy đang dùng. Key chỉ được gửi tới máy chủ cục bộ của tool và tới đúng provider đã nhập.
 
 ---
