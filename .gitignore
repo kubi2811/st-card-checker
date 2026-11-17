@@ -1,0 +1,8 @@
+node_modules/
+.install.json
+.update-tmp/
+config.local.json
+*.fixed.json
+samples/
+.DS_Store
+public/_test/

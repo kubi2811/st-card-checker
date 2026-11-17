@@ -1,0 +1,6 @@
+{
+  "github": { "owner": "kubi2811", "repo": "st-card-checker", "branch": "main" },
+  "port": 4848,
+  "checkIntervalMinutes": 5,
+  "autoUpdateOnStart": true
+}

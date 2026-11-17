@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ST Card Checker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">⚖</span>
+    <div>
+      <h1>ST Card Checker</h1>
+      <small>So sánh File RAW ↔ File DỊCH thẻ SillyTavern · <span id="ver"></span></small>
+    </div>
+  </div>
+  <div class="upd" id="upd">
+    <span id="updText">Đang kiểm tra cập nhật…</span>
+    <button id="btnCheckUpd" class="ghost sm" title="Kiểm tra lại">↻</button>
+    <button id="btnApplyUpd" class="primary sm hidden">Cập nhật ngay</button>
+  </div>
+</header>
+
+<main>
+  <section class="load card">
+    <div class="drops">
+      <label class="drop" id="dropRaw">
+        <input type="file" accept=".json,application/json" id="fileRaw" hidden>
+        <b>File RAW</b><span class="hint">Tệp gốc (tiếng Trung) — kéo thả hoặc bấm để chọn</span>
+        <span class="fname" id="nameRaw"></span>
+      </label>
+      <button class="ghost swap" id="btnSwap" title="Đổi chỗ RAW ↔ DỊCH">⇄</button>
+      <label class="drop" id="dropTrans">
+        <input type="file" accept=".json,application/json" id="fileTrans" hidden>
+        <b>File DỊCH</b><span class="hint">Tệp đã dịch cần rà soát — kéo thả hoặc bấm để chọn</span>
+        <span class="fname" id="nameTrans"></span>
+      </label>
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="optTagged"> Tính cả mục Worldbook chỉ có tag <code>[mvu_*]</code> ở comment (kể cả khi nội dung không có EJS/MVU)</label>
+      <button class="primary" id="btnAnalyze" disabled>Phân tích</button>
+    </div>
+    <div id="status" class="status"></div>
+  </section>
+
+  <section id="result" class="hidden">
+    <div class="summary card">
+      <div class="totals" id="totals"></div>
+      <div class="checklist" id="checklist"></div>
+    </div>
+
+    <nav class="tabs">
+      <button data-tab="items" class="active">Lỗi theo mục</button>
+      <button data-tab="rules">Lỗi theo loại</button>
+      <button data-tab="glossary">Đồng bộ thuật ngữ</button>
+      <button data-tab="fix">Sửa tự động</button>
+      <button data-tab="report">Báo cáo &amp; xuất</button>
+    </nav>
+
+    <div class="tab" id="tab-items">
+      <div class="split">
+        <aside class="card list">
+          <div class="filters">
+            <input id="q" placeholder="Tìm mục…">
+            <select id="sevFilter">
+              <option value="any">Có lỗi bất kỳ</option>
+              <option value="error">Chỉ mục có lỗi đỏ</option>
+              <option value="all">Tất cả mục trong phạm vi</option>
+            </select>
+          </div>
+          <div id="itemList"></div>
+        </aside>
+        <section class="card detail" id="detail"><p class="muted">Chọn một mục bên trái.</p></section>
+      </div>
+    </div>
+
+    <div class="tab hidden" id="tab-rules"><div class="card" id="ruleView"></div></div>
+
+    <div class="tab hidden" id="tab-glossary">
+      <div class="card">
+        <p class="muted">Bảng được dựng tự động bằng cách căn các chuỗi trong code (Scripts, EJS, initvar, JSONPatch, &lt;script&gt; của Regex) giữa RAW và DỊCH. Một thuật ngữ gốc bị dịch thành nhiều kiểu khác nhau là dấu hiệu lệch tên biến / enum.</p>
+        <div class="filters">
+          <input id="gq" placeholder="Tìm thuật ngữ (Trung hoặc Việt)…">
+          <label class="chk"><input type="checkbox" id="gConflict" checked> Chỉ hiện thuật ngữ bị dịch nhiều kiểu</label>
+          <button class="ghost sm" id="btnGlossCsv">Tải CSV</button>
+        </div>
+        <div id="glossView"></div>
+      </div>
+    </div>
+
+    <div class="tab hidden" id="tab-fix">
+      <div class="card">
+        <p>Chỉ sửa trong 4 vùng lõi của <b>File DỊCH</b>. Không bao giờ đụng <code>keys</code>, <code>secondary_keys</code>, <code>button(s)</code>, mục văn xuôi. Base64 dạng code/văn bản được giải mã → sửa → mã hoá lại đúng vị trí; ảnh/âm thanh/font giữ nguyên 100%.</p>
+        <div class="fixopts">
+          <label class="chk"><input type="checkbox" id="fxFonts" checked> <b>Font tiếng Việt</b> — xoá font CJK/Georgia/Palatino… khỏi <code>font-family</code> &amp; biến CSS, thay bằng bộ font chuẩn (Serif/Sans/Mono).</label>
+          <label class="chk"><input type="checkbox" id="fxMd" checked> <b>URL Markdown</b> — <code>[https://a](https://a)</code> → <code>https://a</code>.</label>
+          <label class="chk"><input type="checkbox" id="fxData" checked> <b>Đồng bộ data.*</b> — chép <code>first_mes</code>/<code>alternate_greetings</code> gốc sang <code>data.*</code>.</label>
+          <label class="chk"><input type="checkbox" id="fxEllipsis"> <b>Bỏ cắt chữ</b> — <code>text-overflow: ellipsis</code> → <code>clip</code>, <code>-webkit-line-clamp</code> → <code>unset</code>.</label>
+          <label class="chk"><input type="checkbox" id="fxGloss"> <b>Thay Hán tự sót bằng bảng thuật ngữ</b> — chỉ những cụm khớp chính xác &amp; chỉ có 1 cách dịch.</label>
+          <label class="chk"><input type="checkbox" id="fxPunct"> <b>Dấu câu CJK → ASCII</b> (<code>，：；（）《》｜</code>…) — bỏ qua bên trong regex. <span class="warnTxt">Cẩn thận: nếu code so sánh chuỗi có dấu này với dữ liệu ngoài phạm vi, hãy kiểm tra lại.</span></label>
+        </div>
+        <button class="primary" id="btnFix">Áp dụng &amp; tải file đã sửa</button>
+        <div id="fixLog"></div>
+      </div>
+    </div>
+
+    <div class="tab hidden" id="tab-report">
+      <div class="card">
+        <div class="row">
+          <button class="primary" id="btnReportMd">Tải báo cáo (.md)</button>
+          <button class="ghost" id="btnCopyReport">Sao chép báo cáo</button>
+          <button class="ghost" id="btnBundle" title="Chỉ trích xuất các mục trong phạm vi có lỗi (RAW + DỊCH) — tiết kiệm token khi đưa cho AI sửa">Xuất gói trích xuất cho AI (.json)</button>
+        </div>
+        <textarea id="reportText" readonly></textarea>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="viewer" class="viewer hidden">
+  <div class="viewer-head">
+    <div id="viewerTitle"></div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="vFull"> Xem toàn bộ</label>
+      <button class="ghost sm" id="vClose">Đóng ✕</button>
+    </div>
+  </div>
+  <div class="panes">
+    <div class="pane"><div class="pane-h">RAW</div><div class="code" id="vRaw"></div></div>
+    <div class="pane"><div class="pane-h">DỊCH</div><div class="code" id="vTrans"></div></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
