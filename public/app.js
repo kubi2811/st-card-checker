@@ -29,6 +29,7 @@ function refreshDrops() {
     $(nid).textContent = f ? `${f.name} · ${(f.text.length / 1024 / 1024).toFixed(2)} MB · tên thẻ: ${f.obj?.data?.name || f.obj?.name || '?'}` : '';
   }
   $('#btnAnalyze').disabled = !(S.raw && S.trans);
+  if (window.aiRefresh) window.aiRefresh();
 }
 setupDrop('#dropRaw', '#fileRaw', '#nameRaw', 'raw');
 setupDrop('#dropTrans', '#fileTrans', '#nameTrans', 'trans');
@@ -306,3 +307,136 @@ $('#btnApplyUpd').onclick = async () => {
 };
 pollUpd();
 setInterval(pollUpd, 60000);
+
+// ================= Sửa bằng AI =================
+(() => {
+  const LS = 'stcc.ai.v1';
+  const store = { get() { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (_) { return {}; } }, set(v) { try { localStorage.setItem(LS, JSON.stringify(v)); } catch (_) { /* bỏ qua */ } } };
+  const F = { aiUrl: 'v', aiKey: 'v', aoRebuild: 'c', aoTerms: 'c', aoFonts: 'c', aoData: 'c', aoEllipsis: 'c', aoConc: 'v', aoBatch: 'v', aoSegs: 'v', aoSegLen: 'v', aoPasses: 'v', aoTemp: 'v', aoMax: 'v', aoGloss: 'v' };
+  const saved = store.get();
+  for (const [id, t] of Object.entries(F)) {
+    const el = $('#' + id);
+    if (saved[id] !== undefined) { if (t === 'c') el.checked = saved[id]; else el.value = saved[id]; }
+    el.addEventListener('change', save);
+  }
+  if (saved.models) fillModels(saved.models, saved.model);
+  if (saved.mode) { const r = document.querySelector(`input[name=aiMode][value=${saved.mode}]`); if (r) r.checked = true; }
+  document.querySelectorAll('input[name=aiMode]').forEach((r) => r.addEventListener('change', () => { save(); refresh(); }));
+  $('#aiModel').addEventListener('change', () => { save(); refresh(); });
+  function save() {
+    const v = { ...store.get() };
+    for (const [id, t] of Object.entries(F)) v[id] = t === 'c' ? $('#' + id).checked : $('#' + id).value;
+    v.model = $('#aiModel').value; v.mode = mode();
+    store.set(v);
+  }
+  const mode = () => document.querySelector('input[name=aiMode]:checked').value;
+  function refresh() {
+    const ok = S.raw && (mode() === 'translate' || S.trans) && $('#aiUrl').value.trim() && $('#aiModel').value;
+    $('#aiStart').disabled = !ok || !!J.id && J.running;
+    const need = !S.raw ? 'Cần chọn File RAW.' : (mode() === 'fix' && !S.trans ? 'Cần chọn File DỊCH (hoặc chọn “Dịch mới từ RAW”).' : (!$('#aiModel').value ? 'Nhập URL + key rồi bấm “Tải model”.' : ''));
+    if (need || $('#aiMsg').dataset.need) $('#aiMsg').textContent = need;
+    $('#aiMsg').dataset.need = need ? '1' : '';
+  }
+  window.aiRefresh = refresh;
+  $('#aiUrl').addEventListener('input', refresh);
+  $('#aiEye').onclick = () => { const k = $('#aiKey'); k.type = k.type === 'password' ? 'text' : 'password'; };
+
+  function fillModels(list, sel) {
+    const s = $('#aiModel');
+    s.innerHTML = list.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+    const pick = sel && list.includes(sel) ? sel : (list.find((m) => /flash/i.test(m)) || list[0] || '');
+    s.value = pick;
+  }
+  $('#aiLoad').onclick = async () => {
+    const b = $('#aiLoad'); b.disabled = true; $('#aiMsg').textContent = 'Đang tải danh sách model…';
+    try {
+      const r = await fetch('/api/ai/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseURL: $('#aiUrl').value, apiKey: $('#aiKey').value }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      if (!j.models.length) throw new Error('Provider không trả về model nào');
+      $('#aiUrl').value = j.baseURL;
+      fillModels(j.models, $('#aiModel').value || store.get().model);
+      const v = store.get(); v.models = j.models; store.set(v); save();
+      $('#aiMsg').textContent = `Đã tải ${j.models.length} model.`;
+    } catch (e) { $('#aiMsg').textContent = 'Không tải được model: ' + e.message; }
+    b.disabled = false; refresh();
+  };
+
+  const J = { id: null, since: 0, running: false, timer: null };
+  $('#aiStart').onclick = async () => {
+    save();
+    const n = (id, d) => (Number($('#' + id).value) || d);
+    const body = {
+      mode: mode(), raw: S.raw.text, trans: S.trans ? S.trans.text : null,
+      options: { includeTaggedEntries: $('#optTagged').checked, rebuild: $('#aoRebuild').checked, termPass: $('#aoTerms').checked, fonts: $('#aoFonts').checked, mdlink: $('#aoFonts').checked, dataSync: $('#aoData').checked, ellipsis: $('#aoEllipsis').checked, passes: n('aoPasses', 2), glossaryOverride: $('#aoGloss').value },
+      ai: { baseURL: $('#aiUrl').value.trim(), apiKey: $('#aiKey').value.trim(), model: $('#aiModel').value, concurrency: n('aoConc', 8), batchChars: n('aoBatch', 6000), batchSegs: n('aoSegs', 60), segLen: n('aoSegLen', 900), temperature: $('#aoTemp').value === '' ? null : Number($('#aoTemp').value), maxTokens: Number($('#aoMax').value) || 0 },
+    };
+    try {
+      const r = await fetch('/api/ai/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      Object.assign(J, { id: j.id, since: 0, running: true });
+      $('#aiLog').innerHTML = ''; $('#aiRes').classList.add('hidden'); $('#aiRun').classList.remove('hidden');
+      $('#aiStop').classList.remove('hidden'); refresh();
+      poll();
+    } catch (e) { $('#aiMsg').textContent = 'Lỗi: ' + e.message; }
+  };
+  $('#aiStop').onclick = () => J.id && fetch(`/api/ai/job/${J.id}/cancel`, { method: 'POST' });
+  $('#aiOnlyWarn').onchange = () => $('#aiLog').classList.toggle('onlywarn', $('#aiOnlyWarn').checked);
+  $('#aiLog').classList.toggle('onlywarn', $('#aiOnlyWarn').checked);
+
+  async function poll() {
+    clearTimeout(J.timer);
+    let st;
+    try {
+      const r = await fetch(`/api/ai/job/${J.id}?since=${J.since}`);
+      st = await r.json();
+      if (!r.ok) throw new Error(st.error);
+    } catch (e) { $('#aiPhase').textContent = 'Mất kết nối: ' + e.message; J.running = false; refresh(); return; }
+    J.since = st.logTotal;
+    const box = $('#aiLog');
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+    box.insertAdjacentHTML('beforeend', st.log.map((l) => `<div class="${l.level}">${new Date(l.t).toLocaleTimeString()} ${esc(l.msg)}</div>`).join(''));
+    if (atBottom) box.scrollTop = box.scrollHeight;
+    const s = st.stats;
+    const pct = s.batches ? Math.round(100 * s.batchesDone / s.batches) : 0;
+    $('#aiPhase').textContent = (st.pass > 1 ? `Vòng ${st.pass} · ` : '') + st.phase + (st.state === 'running' && s.batches ? ` — ${pct}%` : '');
+    $('#aiTime').textContent = `${Math.round(st.elapsed)} giây`;
+    $('#aiBar').style.width = (st.state === 'done' ? 100 : pct) + '%';
+    const chip = (t) => `<span>${t}</span>`;
+    $('#aiStats').innerHTML = [
+      chip(`Lượt gọi API: ${s.calls}`), chip(`Token: ${s.promptTokens.toLocaleString()} vào / ${s.completionTokens.toLocaleString()} ra`),
+      chip(`Đoạn: ${s.segsOk}/${s.segs} ổn · ${s.segsFail} giữ nguyên · ${s.segsReverted} hoàn tác`), chip(`Trường dựng lại từ RAW: ${s.rebuilt}`),
+      s.errors ? `<span class="pill error">${s.errors} lỗi API</span>` : '',
+      st.before ? chip(`Trước: <b>${st.before.error}</b> lỗi · ${st.before.warn} cảnh báo`) : '',
+      st.after ? `<span class="pill ${st.after.error ? 'warn' : 'ok'}">Sau: ${st.after.error} lỗi · ${st.after.warn} cảnh báo</span>` : '',
+    ].join('');
+    if (st.state === 'running') { J.timer = setTimeout(poll, 1000); return; }
+    J.running = false; $('#aiStop').classList.add('hidden'); refresh();
+    $('#aiPhase').textContent = { done: 'Hoàn tất ✓', cancelled: 'Đã dừng', error: 'Lỗi — xem nhật ký' }[st.state] || st.state;
+    if (st.hasResult) $('#aiRes').classList.remove('hidden');
+  }
+
+  const outName = () => {
+    const b = (S.trans && mode() === 'fix' ? S.trans.name : S.raw.name).replace(/\.json$/i, '');
+    return b + (mode() === 'fix' ? '.ai-fixed.json' : '.ai-vi.json');
+  };
+  const getResult = async () => { const r = await fetch(`/api/ai/job/${J.id}/result`); if (!r.ok) throw new Error((await r.json()).error); return r.text(); };
+  const download = (name, text, type = 'application/json') => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
+  $('#aiDownload').onclick = async () => { try { download(outName(), await getResult()); } catch (e) { alert(e.message); } };
+  $('#aiUse').onclick = async () => {
+    try {
+      const text = await getResult();
+      S.trans = { name: outName(), text, obj: JSON.parse(text) };
+      refreshDrops();
+      document.querySelector('input[name=aiMode][value=fix]').checked = true; save(); refresh();
+      await analyze();
+      $('#result').scrollIntoView({ behavior: 'smooth' });
+    } catch (e) { alert(e.message); }
+  };
+  $('#aiGlossDl').onclick = async () => {
+    const r = await fetch(`/api/ai/job/${J.id}/result?glossary=1`); const j = await r.json();
+    download('tu-dien.txt', (j.glossary || []).map(([a, b]) => `${a} = ${b}`).join('\n'), 'text/plain');
+  };
+  refresh();
+})();

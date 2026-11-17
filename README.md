@@ -1,5 +1,25 @@
 # ST Card Checker
 
+## Sửa / dịch thẻ bằng AI (API dạng OpenAI)
+
+Nhập **URL API** (ví dụ `https://…/v1`) + **API key** → bấm **Tải model** → chọn model → **Bắt đầu sửa bằng AI**. Model nào gọi được qua `/v1/chat/completions` kiểu OpenAI đều dùng được.
+
+Hai chế độ:
+- **Sửa bản dịch** (RAW + DỊCH): thay cho cách cũ là gửi cả prompt dài kèm 2 file cho AI.
+- **Dịch mới từ RAW** (chỉ RAW): dịch 4 vùng kỹ thuật của thẻ gốc.
+
+Cách tool làm để đỡ tốn token và không làm hỏng code:
+1. Bộ kiểm tra tất định (bên dưới) phân tích RAW ↔ DỊCH trước, tự dựng **từ điển thuật ngữ** từ bản dịch có sẵn.
+2. Trường nào bị hỏng khung code, lỗi cú pháp hoặc mất URL (ví dụ script loader bị thay bằng danh sách comment) thì **dựng lại từ RAW**.
+3. Tên biến/khoá chưa có trong từ điển được dịch trước một lượt, để mọi chỗ (initvar, schema, EJS, JSONPatch, script, regex) dùng cùng một tên.
+4. Chỉ những **dòng còn Hán tự** hoặc có lỗi đồng bộ biến (`getwi`, tên biến lạ…) mới được gửi cho AI, theo lô, chạy song song. Dòng rất dài (HTML/JS rút gọn) được cắt nhỏ. Base64 được giải mã ra để dịch, rồi mã hoá lại.
+5. Kiểm tra từng dòng AI trả về: nếu thêm/bớt dấu nháy, ngoặc, `;`, `=` hoặc vẫn còn Hán tự thì gửi lại 1 lần, vẫn sai thì giữ nguyên dòng cũ. Sau khi ghép, tool chạy `node --check`; dòng nào gây lỗi cú pháp mới thì hoàn tác dòng đó.
+6. Sửa font tiếng Việt, URL Markdown, đồng bộ `data.*`, rồi phân tích lại để so số lỗi trước/sau. Mặc định chạy 2 vòng.
+
+URL, key và các tuỳ chọn được lưu trong trình duyệt của máy đang dùng. Key chỉ được gửi tới máy chủ cục bộ của tool và tới đúng provider đã nhập.
+
+---
+
 Công cụ so sánh **File RAW** (thẻ gốc tiếng Trung) và **File DỊCH** của thẻ nhân vật SillyTavern, kiểm tra tự động theo checklist rà soát bản dịch:
 
 | Checklist | Công cụ kiểm tra gì |
@@ -27,7 +47,7 @@ Ngoài ra: xem **so sánh song song RAW | DỊCH** tại đúng dòng lỗi, t�
    - **macOS:** nháy đúp `start.command` (lần đầu nếu bị chặn: chuột phải → Open). Hoặc mở Terminal trong thư mục và gõ `node launcher.js`
    - **Linux:** `./start.sh`
 
-Trình duyệt sẽ tự mở `http://localhost:4848`. Kéo thả File RAW và File DỊCH → **Phân tích**.
+Trình duyệt sẽ tự mở `http://localhost:4848`. Kéo thả File RAW và File DỊCH, rồi bấm **Bắt đầu sửa bằng AI** hoặc **Kiểm tra (không dùng AI)**.
 
 Không cần `npm install` — công cụ không dùng thư viện ngoài.
 
@@ -58,6 +78,9 @@ lib/analyzer.js    toàn bộ quy tắc kiểm tra
 lib/fixer.js       sửa tự động
 lib/fonts.js       quy chuẩn font tiếng Việt
 lib/jscheck.js     node --check
+lib/ai/client.js   gọi API dạng OpenAI (models, chat/completions, thử lại khi 429/5xx)
+lib/ai/prompts.js  prompt hệ thống + định dạng [[id]] đoạn
+lib/ai/pipeline.js quy trình AI: phân tích → từ điển → gửi đoạn lỗi → kiểm tra → ghép
 lib/updater.js     tự cập nhật từ GitHub
 public/            giao diện web
 ```

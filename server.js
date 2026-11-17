@@ -6,6 +6,8 @@ const path = require('path');
 const { analyze } = require('./lib/analyzer');
 const { applyFixes, detectIndent } = require('./lib/fixer');
 const updater = require('./lib/updater');
+const aiClient = require('./lib/ai/client');
+const aiPipeline = require('./lib/ai/pipeline');
 const config = require('./config.json');
 const pkg = require('./package.json');
 
@@ -60,6 +62,33 @@ const server = http.createServer(async (req, res) => {
       const { card, log } = applyFixes(trans, opts);
       const indent = detectIndent(body.trans);
       return send(res, 200, { text: JSON.stringify(card, null, indent), log });
+    }
+    // ----- AI -----
+    if (req.method === 'POST' && url.pathname === '/api/ai/models') {
+      const body = JSON.parse(await readBody(req));
+      if (!body.baseURL) return send(res, 400, { error: 'Chưa nhập URL API' });
+      return send(res, 200, await aiClient.listModels(body.baseURL, body.apiKey));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/ai/start') {
+      const body = JSON.parse(await readBody(req));
+      const mode = body.mode === 'translate' ? 'translate' : 'fix';
+      parseCard(body.raw, 'File RAW');
+      if (mode === 'fix') parseCard(body.trans, 'File DỊCH');
+      if (!body.ai || !body.ai.baseURL || !body.ai.model) return send(res, 400, { error: 'Thiếu URL API hoặc model' });
+      const job = aiPipeline.start({ rawText: body.raw, transText: body.trans, mode, options: body.options || {}, ai: body.ai });
+      return send(res, 200, { id: job.id });
+    }
+    let m;
+    if ((m = url.pathname.match(/^\/api\/ai\/job\/(\w+)(\/cancel|\/result)?$/))) {
+      const job = aiPipeline.jobs.get(m[1]);
+      if (!job) return send(res, 404, { error: 'Không tìm thấy phiên chạy (máy chủ đã khởi động lại?)' });
+      if (m[2] === '/cancel' && req.method === 'POST') { job.cancel(); return send(res, 200, { ok: true }); }
+      if (m[2] === '/result') {
+        if (!job.result) return send(res, 404, { error: 'Chưa có kết quả' });
+        if (url.searchParams.get('glossary')) return send(res, 200, { glossary: job.glossary || [] });
+        return send(res, 200, job.result, 'application/json; charset=utf-8');
+      }
+      return send(res, 200, aiPipeline.status(job, Number(url.searchParams.get('since')) || 0));
     }
     // tệp tĩnh
     let p = decodeURIComponent(url.pathname);

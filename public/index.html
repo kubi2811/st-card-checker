@@ -39,9 +39,68 @@
     </div>
     <div class="row">
       <label class="chk"><input type="checkbox" id="optTagged"> Tính cả mục Worldbook chỉ có tag <code>[mvu_*]</code> ở comment (kể cả khi nội dung không có EJS/MVU)</label>
-      <button class="primary" id="btnAnalyze" disabled>Phân tích</button>
+      <button class="primary" id="btnAnalyze" disabled>Kiểm tra (không dùng AI)</button>
     </div>
     <div id="status" class="status"></div>
+  </section>
+
+  <section class="card ai" id="aiPanel">
+    <div class="ai-head">
+      <h2>Sửa bằng AI <small class="muted">— API dạng OpenAI</small></h2>
+      <span class="muted" id="aiHint">Tool tự kiểm tra trước, rồi chỉ gửi cho AI những đoạn có lỗi nên đỡ tốn token.</span>
+    </div>
+    <div class="ai-grid">
+      <label>URL API <input id="aiUrl" placeholder="https://…/v1" spellcheck="false" autocomplete="off"></label>
+      <label>API key
+        <span class="pw"><input id="aiKey" type="password" placeholder="sk-…" spellcheck="false" autocomplete="off"><button class="ghost sm" id="aiEye" type="button" title="Hiện/ẩn">👁</button></span>
+      </label>
+      <label>Model
+        <span class="pw"><select id="aiModel"><option value="">— bấm “Tải model” —</option></select><button class="sm" id="aiLoad" type="button">Tải model</button></span>
+      </label>
+    </div>
+    <div class="row ai-mode">
+      <label class="chk"><input type="radio" name="aiMode" value="fix" checked> <span><b>Sửa bản dịch</b> (cần RAW + DỊCH): sửa Hán tự sót, tên biến lệch, code bị hỏng thì dựng lại từ RAW</span></label>
+      <label class="chk"><input type="radio" name="aiMode" value="translate"> <span><b>Dịch mới từ RAW</b> (chỉ cần RAW): dịch 4 vùng kỹ thuật của thẻ gốc</span></label>
+    </div>
+    <details class="ai-adv">
+      <summary>Tuỳ chọn nâng cao</summary>
+      <div class="fixopts">
+        <label class="chk"><input type="checkbox" id="aoRebuild" checked> Dựng lại từ RAW các trường bị hỏng khung code / lỗi cú pháp / mất URL</label>
+        <label class="chk"><input type="checkbox" id="aoTerms" checked> Dịch trước các tên biến/khoá chưa có trong từ điển để mọi đoạn dùng thống nhất</label>
+        <label class="chk"><input type="checkbox" id="aoFonts" checked> Sửa font tiếng Việt, URL Markdown</label>
+        <label class="chk"><input type="checkbox" id="aoData" checked> Đồng bộ <code>first_mes</code>/<code>alternate_greetings</code> → <code>data.*</code> (chỉ gửi bản gốc cho AI)</label>
+        <label class="chk"><input type="checkbox" id="aoEllipsis"> Bỏ cắt chữ (ellipsis / line-clamp)</label>
+      </div>
+      <div class="ai-nums">
+        <label>Luồng song song <input type="number" id="aoConc" min="1" max="64" value="8"></label>
+        <label>Ký tự mỗi lượt gọi <input type="number" id="aoBatch" min="500" step="500" value="6000"></label>
+        <label>Đoạn mỗi lượt <input type="number" id="aoSegs" min="1" value="60"></label>
+        <label>Cắt dòng dài ở <input type="number" id="aoSegLen" min="200" step="100" value="900"></label>
+        <label>Số vòng <input type="number" id="aoPasses" min="1" max="5" value="2"></label>
+        <label>Temperature <input type="number" id="aoTemp" min="0" max="2" step="0.1" value="0.2"></label>
+        <label>max_tokens <input type="number" id="aoMax" min="0" placeholder="mặc định"></label>
+      </div>
+      <label class="gl">Từ điển bắt buộc (mỗi dòng <code>中文 = Tiếng Việt</code>, ghi đè từ điển tự dựng)
+        <textarea id="aoGloss" rows="4" spellcheck="false" placeholder="兵力 = Binh lực&#10;状态栏 = Thanh trạng thái"></textarea>
+      </label>
+    </details>
+    <div class="row">
+      <button class="primary" id="aiStart" disabled>Bắt đầu sửa bằng AI</button>
+      <button class="ghost hidden" id="aiStop">Dừng</button>
+      <span id="aiMsg" class="muted"></span>
+    </div>
+    <div id="aiRun" class="hidden">
+      <div class="ai-phase"><b id="aiPhase"></b> <span class="muted" id="aiTime"></span></div>
+      <div class="bar"><div id="aiBar"></div></div>
+      <div class="ai-stats" id="aiStats"></div>
+      <div class="row ai-res hidden" id="aiRes">
+        <button class="primary" id="aiDownload">Tải file đã sửa</button>
+        <button class="ghost" id="aiUse">Dùng kết quả làm File DỊCH &amp; phân tích lại</button>
+        <button class="ghost" id="aiGlossDl">Tải từ điển đã dùng</button>
+      </div>
+      <div class="row"><label class="chk"><input type="checkbox" id="aiOnlyWarn" checked> Chỉ hiện cảnh báo/lỗi</label></div>
+      <div class="ai-log mono" id="aiLog"></div>
+    </div>
   </section>
 
   <section id="result" class="hidden">
