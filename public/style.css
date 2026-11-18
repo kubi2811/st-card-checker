@@ -157,3 +157,6 @@ textarea#reportText { width: 100%; min-height: 420px; margin-top: 12px; font-fam
 .pp-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .pp-head input[data-k=name] { flex: 1 1 160px; min-width: 0; }
 .pp textarea { width: 100%; font-family: var(--mono); font-size: 12.5px; resize: vertical; }
+.ai-log details summary { cursor: pointer; }
+.ai-log details .cmp { margin: 2px 0 6px 16px; white-space: pre-wrap; word-break: break-all; opacity: .9; }
+.ai-log.onlywarn details.info { display: none; }

@@ -457,10 +457,16 @@ setInterval(pollUpd, 60000);
       $('#cacheInfo').textContent = `Bộ nhớ đệm: ${c.entries.toLocaleString()} mục (${(c.bytes / 1024 / 1024).toFixed(1)} MB). File kết quả tự lưu ở ${c.outDir}`;
     } catch (_) { /* bỏ qua */ }
   }
-  $('#btnCacheClear').onclick = async () => {
-    if (!confirm('Xoá toàn bộ bản dịch đã lưu? Lần chạy sau sẽ phải gọi AI dịch lại từ đầu.')) return;
-    await fetch('/api/ai/cache', { method: 'POST' }); loadCacheInfo();
+  const clearCache = async () => {
+    if (J.running) return alert('Đang chạy — hãy Dừng trước rồi mới xoá bộ nhớ đệm.');
+    let info = '';
+    try { const c = await (await fetch('/api/ai/cache')).json(); info = ` (${c.entries.toLocaleString()} mục, ${(c.bytes / 1024 / 1024).toFixed(1)} MB)`; } catch (_) { /* bỏ qua */ }
+    if (!confirm(`Xoá toàn bộ bản dịch đã lưu${info}?\nLần chạy sau AI sẽ dịch lại từ đầu (tốn lượt gọi). File kết quả trong du-lieu/ket-qua/ KHÔNG bị xoá.`)) return;
+    await fetch('/api/ai/cache', { method: 'POST' }); await loadCacheInfo();
+    $('#aiMsg').textContent = 'Đã xoá bộ nhớ đệm.';
   };
+  $('#btnCacheClear').onclick = clearCache;
+  $('#btnCacheClear2').onclick = clearCache;
   loadCacheInfo();
   $('#aiOnlyWarn').onchange = () => $('#aiLog').classList.toggle('onlywarn', $('#aiOnlyWarn').checked);
   $('#aiLog').classList.toggle('onlywarn', $('#aiOnlyWarn').checked);
@@ -476,7 +482,12 @@ setInterval(pollUpd, 60000);
     J.since = st.logTotal;
     const box = $('#aiLog');
     const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
-    box.insertAdjacentHTML('beforeend', st.log.map((l) => `<div class="${l.level}">${new Date(l.t).toLocaleTimeString()} ${esc(l.msg)}</div>`).join(''));
+    box.insertAdjacentHTML('beforeend', st.log.map((l) => {
+      const head = `${new Date(l.t).toLocaleTimeString()} ${esc(l.msg)}`;
+      if (l.src == null) return `<div class="${l.level}">${head}</div>`;
+      // đoạn bị loại / hoàn tác: bấm để xem bản gốc và bản AI trả về
+      return `<details class="${l.level}"><summary>${head}</summary><div class="cmp"><b>Gốc:</b> ${esc(l.src)}</div><div class="cmp"><b>AI trả về:</b> ${l.got == null ? '<i>(không có trong phản hồi)</i>' : esc(l.got)}</div></details>`;
+    }).join(''));
     if (atBottom) box.scrollTop = box.scrollHeight;
     const s = st.stats;
     const pct = s.batches ? Math.round(100 * s.batchesDone / s.batches) : 0;
