@@ -1,6 +1,6 @@
 {
   "name": "st-card-checker",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "So sánh File RAW và File DỊCH của thẻ nhân vật SillyTavern: kiểm tra Hán tự sót, đồng bộ biến MVU/EJS, cú pháp script, regex, font tiếng Việt.",
   "main": "server.js",
   "private": true,
